@@ -1,0 +1,47 @@
+---
+- hosts: all
+  tasks:
+    - name: Clone drupal
+      git:
+        repo: "http://git.drupal.org/project/drupal.git"
+        dest: "/tmp/drupal"
+        update: yes
+        force: yes
+        version: "HEAD"
+    - name: Sync repo to web directory
+      synchronize:
+        mode: pull
+        src: "/tmp/drupal/"
+        dest: "/var/www/html/"
+        delete: yes
+        rsync_opts:
+          - "--exclude=.git/*"
+          - "--exclude=vendor/*"
+          - "--exclude=modules/*"
+          - "--exclude=themes/*"
+    - name: Install composer dependencies
+      composer:
+        command: "install"
+        working_dir: "/var/www/html/"
+        no_dev: no
+    - name: Create files directory
+      file:
+        path: /var/www/html/sites/default/files
+        state: directory
+        mode: 777
+    - name: Install drupal
+      shell: >
+        drush si --uri=http://web --root=/var/www/html \
+              --db-url=mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db/${MYSQL_DATABASE} \
+              -y \
+              --account-name=$DRUPAL_USER --account-pass=$DRUPAL_PASSWORD
+      environment:
+        DRUPAL_USER: "{{ lookup('env', 'DRUPAL_USER') | default('admin') }}"
+        DRUPAL_PASSWORD: "{{ lookup('env', 'DRUPAL_PASSWORD') | default('password') }}"
+      args:
+        chdir: /var/www/html
+    - name: Create the simpletest directory
+      file:
+        path: /var/www/html/sites/simpletest
+        state: directory
+        mode: 777
